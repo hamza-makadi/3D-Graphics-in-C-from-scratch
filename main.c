@@ -1,4 +1,5 @@
 #include <SDL.h>
+#include <SDL_gfxPrimitives.h>
 #include <stdio.h>
 #include <math.h>
 
@@ -66,7 +67,7 @@ typedef struct{
 }mat4x4;
 
 // Function to multiply a matrix and a vector
-void MultiplyMatrixVector(const Vector3D *i, Vector3D *o, const mat4x4 *m) {
+void MultiplyMatrixVector(Vector3D *i, Vector3D *o, mat4x4 *m) {
     // Perform the matrix-vector multiplication
     o->x = i->x * m->m[0][0] + i->y * m->m[1][0] + i->z * m->m[2][0] + m->m[3][0];
     o->y = i->x * m->m[0][1] + i->y * m->m[1][1] + i->z * m->m[2][1] + m->m[3][1];
@@ -81,6 +82,13 @@ void MultiplyMatrixVector(const Vector3D *i, Vector3D *o, const mat4x4 *m) {
     }
 }
 
+
+// Function to draw a triangle
+void DrawTriangle(SDL_Surface* screen, int x1, int y1, int x2, int y2, int x3, int y3){
+    lineRGBA(screen, x1, y1, x2, y2, 255, 255, 255, 255);
+    lineRGBA(screen, x2, y2, x3, y3, 255, 255, 255, 255);
+    lineRGBA(screen, x3, y3, x1, y1, 255, 255, 255, 255);
+}
 int main(int argc, char* argv[]) {
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
@@ -96,6 +104,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    freopen("CON", "w", stdout);  // redirects stdout to console
+    freopen("CON", "w", stderr);  // redirects stderr to console
+
     // Set the window title
     SDL_WM_SetCaption("Basic SDL 1.2 Program", NULL);
 
@@ -106,8 +117,12 @@ int main(int argc, char* argv[]) {
     meshCube.numTris = sizeof(cubeTriangles) / sizeof(Triangle);
     meshCube.tris = cubeTriangles;
 
+    // Matrix Transformers
     // Projection matrix
     mat4x4 matProj = { 0 }; // All elements initialized to 0
+    // Rotation Matrix
+    mat4x4 matRotZ;
+    mat4x4 matRotX;
 
     float fNear = 0.1f;
     float fFar = 1000.0f;
@@ -123,6 +138,8 @@ int main(int argc, char* argv[]) {
     matProj.m[3][3] = 0.0f;
 
 
+    Uint32 lastTime = SDL_GetTicks();
+    float fTheta = 0.0f;
     // Wait for the user to close the window
     int running = 1;
     SDL_Event event;
@@ -132,8 +149,71 @@ int main(int argc, char* argv[]) {
                 running = 0;
             }
         }
-        SDL_FillRect(screen, NULL, blue);
 
+        Uint32 currentTime = SDL_GetTicks();
+        float deltaTime = (currentTime - lastTime) / 1000.0f; // ms to seconds
+        lastTime = currentTime;
+
+        SDL_FillRect(screen, NULL, blue);
+        mat4x4 matRotZ, matRotX;
+		fTheta += deltaTime;
+
+        // Rotation Z
+        matRotZ.m[0][0] = cos(fTheta);
+        matRotZ.m[0][1] = sin(fTheta);
+        matRotZ.m[1][0] = -sin(fTheta);
+        matRotZ.m[1][1] = cos(fTheta);
+        matRotZ.m[2][2] = 1.0f;
+        matRotZ.m[3][3] = 1.0f;
+
+        // Rotation X
+        matRotX.m[0][0] = 1.0f;
+        matRotX.m[1][1] = cos(fTheta * 0.5f);
+        matRotX.m[1][2] = sin(fTheta * 0.5f);
+        matRotX.m[2][1] = -sin(fTheta * 0.5f);
+        matRotX.m[2][2] = cos(fTheta * 0.5f);
+        matRotX.m[3][3] = 1.0f;
+        int i;
+        for(i = 0; i < meshCube.numTris; i++){
+            Triangle triPojected, triTranslated, triRotatedZ, triRotatedZX;
+
+            MultiplyMatrixVector(&meshCube.tris[i].p[0], &triRotatedZ.p[0], &matRotZ);
+            MultiplyMatrixVector(&meshCube.tris[i].p[1], &triRotatedZ.p[1], &matRotZ);
+            MultiplyMatrixVector(&meshCube.tris[i].p[2], &triRotatedZ.p[2], &matRotZ);
+
+            MultiplyMatrixVector(&triRotatedZ.p[0], &triRotatedZX.p[0], &matRotX);
+            MultiplyMatrixVector(&triRotatedZ.p[1], &triRotatedZX.p[1], &matRotX);
+            MultiplyMatrixVector(&triRotatedZ.p[2], &triRotatedZX.p[2], &matRotX);
+
+            // Translate the cube in the z-axis
+            triTranslated = triRotatedZX ;
+            triTranslated.p[0].z = triRotatedZX.p[0].z + 3.0f;
+            triTranslated.p[1].z = triRotatedZX.p[1].z + 3.0f;
+            triTranslated.p[2].z = triRotatedZX.p[2].z + 3.0f;
+
+
+            MultiplyMatrixVector(&triTranslated.p[0], &triPojected.p[0], &matProj);
+            MultiplyMatrixVector(&triTranslated.p[1], &triPojected.p[1], &matProj);
+            MultiplyMatrixVector(&triTranslated.p[2], &triPojected.p[2], &matProj);
+
+            // Scale and center coordinates to screen space
+            triPojected.p[0].x = (triPojected.p[0].x + 1.0f) * 0.5f * screenWidth;
+            triPojected.p[0].y = (triPojected.p[0].y + 1.0f) * 0.5f * screenHeight;
+
+            triPojected.p[1].x = (triPojected.p[1].x + 1.0f) * 0.5f * screenWidth;
+            triPojected.p[1].y = (triPojected.p[1].y + 1.0f) * 0.5f * screenHeight;
+
+            triPojected.p[2].x = (triPojected.p[2].x + 1.0f) * 0.5f * screenWidth;
+            triPojected.p[2].y = (triPojected.p[2].y + 1.0f) * 0.5f * screenHeight;
+
+
+
+
+            DrawTriangle(screen, triPojected.p[0].x, triPojected.p[0].y,
+                                triPojected.p[1].x, triPojected.p[1].y,
+                                triPojected.p[2].x, triPojected.p[2].y
+                         );
+        }
         // Update the screen
         SDL_Flip(screen);
     }
