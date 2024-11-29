@@ -119,10 +119,12 @@ int main(int argc, char* argv[]) {
 
     // Matrix Transformers
     // Projection matrix
-    mat4x4 matProj = { 0 }; // All elements initialized to 0
+    mat4x4 matProj;
+    memset(&matProj, 0, sizeof(matProj)); // All elements initialized to 0
     // Rotation Matrix
-    mat4x4 matRotZ;
-    mat4x4 matRotX;
+    mat4x4 matRotZ, matRotX;
+    memset(&matRotZ, 0, sizeof(matRotZ));
+    memset(&matRotX, 0, sizeof(matRotX));
 
     float fNear = 0.1f;
     float fFar = 1000.0f;
@@ -136,7 +138,6 @@ int main(int argc, char* argv[]) {
     matProj.m[3][2] = (-fFar * fNear) / (fFar - fNear);
     matProj.m[2][3] = 1.0f;
     matProj.m[3][3] = 0.0f;
-
 
     Uint32 lastTime = SDL_GetTicks();
     float fTheta = 0.0f;
@@ -155,8 +156,8 @@ int main(int argc, char* argv[]) {
         lastTime = currentTime;
 
         SDL_FillRect(screen, NULL, blue);
-        mat4x4 matRotZ, matRotX;
-		fTheta += deltaTime;
+
+		fTheta += 1.0 * deltaTime;
 
         // Rotation Z
         matRotZ.m[0][0] = cos(fTheta);
